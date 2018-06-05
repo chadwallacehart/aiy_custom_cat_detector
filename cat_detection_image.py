@@ -12,9 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Object detection library demo.
+"""Modified Object detection library demo from chadwallacehart.
+Original file:
+    https://github.com/google/aiyprojects-raspbian/blob/aiyprojects/src/examples/vision/object_detection.py
 
- - Takes an input image and tries to detect person, dog, or cat.
+ - Takes an input image and tries to detect person or cat.
  - Draws bounding boxes around detected objects.
  - Saves an image with bounding boxes around detected objects.
 """
@@ -25,6 +27,8 @@ from PIL import Image
 from PIL import ImageDraw
 
 from aiy.vision.inference import ImageInference
+# from aiy.vision.models import object_detection
+# Use my modified file instead
 import aiy_cat_detection
 
 

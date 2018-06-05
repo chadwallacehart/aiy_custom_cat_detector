@@ -12,27 +12,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Object detection library demo.
+"""Modified Object detection library demo by chadwallacehart
+Original reference:
 
- - Takes an input image and tries to detect person, dog, or cat.
- - Draws bounding boxes around detected objects.
- - Saves an image with bounding boxes around detected objects.
+ - Takes an input image and tries to detect person or cat.
+ - Beeps when a cat is seen and saves the image.
 """
 import argparse
-import io
-import sys
-from PIL import Image, ImageDraw, ImageFont
 
 from picamera import PiCamera
-from time import time, strftime, sleep
+from time import time, strftime
 
 
 from aiy.vision.leds import Leds
 from aiy.vision.leds import PrivacyLed
-from aiy.vision.inference import CameraInference
-# from aiy.vision.annotator import Annotator
 from aiy.toneplayer import TonePlayer
 
+from aiy.vision.inference import CameraInference
 import aiy_cat_detection
 
 # Sound setup
@@ -40,19 +36,11 @@ MODEL_LOAD_SOUND = ('C6w', 'c6w', 'C6w')
 BEEP_SOUND = ('E6q', 'C6q')
 player = TonePlayer(gpio=22, bpm=30)
 
-
-def _crop_center(image):
-    width, height = image.size
-    size = min(width, height)
-    x, y = (width - size) / 2, (height - size) / 2
-    return image.crop((x, y, x + size, y + size)), (x, y)
-
 def main():
-    """Object detection camera inference example."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--num_frames',
-        '-n',
+        '-f',
         type=int,
         dest='num_frames',
         default=-1,
@@ -66,90 +54,56 @@ def main():
         default=-1,
         help='Sets the max number of pictures to take, otherwise runs forever.')
 
-    '''
-    parser.add_argument(
-        '--num_objects',
-        '-c',
-        type=int,
-        dest='num_objects',
-        default=3,
-        help='Sets the number of object inferences to print.')
-    '''
     args = parser.parse_args()
 
-    def print_classes(classes, object_count):
-        s = ''
-        for index, (obj, prob) in enumerate(classes):
-            if index > object_count - 1:
-                break
-            s += '%s=%1.2f\t|\t' % (obj, prob)
-        print('%s\r' % s)
-
-    leds = Leds()
-
-    with PiCamera() as camera, PrivacyLed(leds):
+    with PiCamera() as camera, PrivacyLed(Leds()):
+        # See the Raspicam documentation for mode and framerate limits:
+        # https://picamera.readthedocs.io/en/release-1.13/fov.html#sensor-modes
+        # Set to the highest resolution possible at 16:9 aspect ratio
         camera.sensor_mode = 5
         camera.resolution = (1640, 922)
-        camera.framerate = 30
         camera.start_preview(fullscreen=True)
-
-        pics = 0
-
-        # ToDo: see if the annotator work with object detection
-        # conclusion - it doesn't: conflicts with saving the image
-
-        # Annotator renders in software so use a smaller size and scale results
-        # for increased performance.
-#        annotator = Annotator(camera, dimensions=(320, 180))
-        scale_x = 320 / 1640
-        scale_y = 180 / 922
-
-        # Incoming boxes are of the form (x, y, width, height). Scale and
-        # transform to the form (x1, y1, x2, y2).
-        def transform(bounding_box):
-            x, y, width, height = bounding_box
-            return (scale_x * x, scale_y * y, scale_x * (x + width),
-                    scale_y * (y + height))
 
         with CameraInference(aiy_cat_detection.model()) as inference:
             print("Camera inference started")
             player.play(*MODEL_LOAD_SOUND)
 
             last_time = time()
+            pics = 0
             save_pic = False
 
-            for result in inference.run():
-#                annotator.clear()
+            for f, result in enumerate(inference.run()):
+
                 for i, obj in enumerate(aiy_cat_detection.get_objects(result, 0.3)):
-                    print('Object #%d: %s' % (i, str(obj)))
+
+                    print('%s Object #%d: %s' % (strftime("%Y-%m-%d-%H:%M:%S"), i, str(obj)))
                     x, y, width, height = obj.bounding_box
-                    if obj.kind == 1:
+                    if obj.label == 'CAT':
                         save_pic = True
                         player.play(*BEEP_SOUND)
 
-#                    annotator.bounding_box(transform(obj.bounding_box), fill=0)
-
-#                annotator.update()rm
-                now = time()
-                duration = (now - last_time)
-                if duration > 0.50:
-                    print("Total process time: %s seconds. Bonnet inference time: %s ms " % (duration, result.duration_ms))
-
-                last_time = now
-
+                # save the image if there was 1 or more cats detected
                 if save_pic:
                     # save the clean image
-                    filename = "images/image_%s.jpg" % strftime("%Y%m%d-%H%M%S")
-                    camera.capture(filename)
+                    camera.capture("images/image_%s.jpg" % strftime("%Y%m%d-%H%M%S"))
                     pics +=1
                     save_pic = False
 
-                    # save the annotated image
-                    # image = Image.open(filename)
-                    # draw = ImageDraw.Draw(image)
-
-                if pics == args.num_pics:
+                if f == args.num_frames or pics == args.num_pics:
                     break
+
+                now = time()
+                duration = (now - last_time)
+
+                # The Movidius chip runs at 35 ms per image.
+                # Then there is some additional overhead for the object detector to
+                # interpret the result and to save the image. If total process time is
+                # running slower than 50 ms it could be a sign the CPU is geting overrun
+                if duration > 0.50:
+                    print("Total process time: %s seconds. Bonnet inference time: %s ms " %
+                          (duration, result.duration_ms))
+
+                last_time = now
 
         camera.stop_preview()
 

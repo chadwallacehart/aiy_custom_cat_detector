@@ -11,23 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""API for Object Detection tasks."""
+"""API for Object Detection tasks.
+Modified by chadwallacehart
+"""
+
 import math
 import sys
+import os
 
 from aiy.vision.inference import ModelDescriptor
 from aiy.vision.models import utils
-from aiy_cat_detection_anchors import ANCHORS #Note: careful paths here
+from aiy.vision.models.object_detection_anchors import ANCHORS
 
 # _COMPUTE_GRAPH_NAME = 'mobilenet_ssd_256res_0.125_person_cat_dog.binaryproto'
-#_COMPUTE_GRAPH_NAME = '/opt/aiy/models/mobilenet_ssd_256res_0.125_person_cat_dog.binaryproto'
-#_COMPUTE_GRAPH_NAME = '/home/pi/code/models/aiy_cat_detector_embedded_ssd_v4.pb'
-_COMPUTE_GRAPH_NAME  = '/home/pi/code/models/cat_detector_v7.binaryproto'
+_COMPUTE_GRAPH_NAME  =  os.getcwd() + '/custom_models/cat_detector_cwh_180602.binaryproto'
 
 _NUM_ANCHORS = len(ANCHORS)
 _MACHINE_EPS = sys.float_info.epsilon
-# ToDo: set the below programmatically
-_NUM_LABELS = 3
+_NUM_LABELS = 3 # Changed
 
 class Object(object):
     """Object detection result."""
@@ -54,6 +55,7 @@ class Object(object):
         self.bounding_box = bounding_box
         self.kind = kind
         self.score = score
+        self.label = self._LABELS[self.kind] #chadwallacehart: added
 
     def __str__(self):
         return 'kind=%s(%d), score=%f, bbox=%s' % (self._LABELS[self.kind],
@@ -77,15 +79,9 @@ def _decode_detection_result(logit_scores, box_encodings, anchors,
       A list of ObjectDetection.Result.
     """
 
-    """ Debug
-    print("box_encodings len, max: %s, %s\n"
-          "logit_scores len, max: %s, %s\n"
-          "_NUM_ANCHORS len, max: %s, %s"
-          % (len(box_encodings), max(box_encodings), len(logit_scores), max(logit_scores), _NUM_ANCHORS, max(ANCHORS)))
-    """
-
     assert len(box_encodings) == 4 * _NUM_ANCHORS
-    assert len(logit_scores) == _NUM_LABELS * _NUM_ANCHORS    #CWH: Changed
+    # chadwallacehart: modified below to handle a variable number of labels
+    assert len(logit_scores) == _NUM_LABELS * _NUM_ANCHORS
 
     x0, y0 = offset
     width, height = image_size
@@ -94,7 +90,7 @@ def _decode_detection_result(logit_scores, box_encodings, anchors,
     score_threshold = max(score_threshold, _MACHINE_EPS)
     logit_score_threshold = math.log(score_threshold / (1 - score_threshold))
     for i in range(_NUM_ANCHORS):
-        # logits = logit_scores[4 * i: 4 * (i + 1)]
+        # chadwallacehart: modified below to handle a variable number of labels
         logits = logit_scores[_NUM_LABELS * i: _NUM_LABELS * (i + 1)]
         max_logit_score = max(logits)
         max_score_index = logits.index(max_logit_score)
