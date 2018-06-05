@@ -23,7 +23,6 @@ import argparse
 from picamera import PiCamera
 from time import time, strftime
 
-
 from aiy.vision.leds import Leds
 from aiy.vision.leds import PrivacyLed
 from aiy.toneplayer import TonePlayer
@@ -35,6 +34,7 @@ import aiy_cat_detection
 MODEL_LOAD_SOUND = ('C6w', 'c6w', 'C6w')
 BEEP_SOUND = ('E6q', 'C6q')
 player = TonePlayer(gpio=22, bpm=30)
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -77,7 +77,7 @@ def main():
                 for i, obj in enumerate(aiy_cat_detection.get_objects(result, 0.3)):
 
                     print('%s Object #%d: %s' % (strftime("%Y-%m-%d-%H:%M:%S"), i, str(obj)))
-                    x, y, width, height = obj.bounding_box
+                    # x, y, width, height = obj.bounding_box
                     if obj.label == 'CAT':
                         save_pic = True
                         player.play(*BEEP_SOUND)
@@ -86,7 +86,7 @@ def main():
                 if save_pic:
                     # save the clean image
                     camera.capture("images/image_%s.jpg" % strftime("%Y%m%d-%H%M%S"))
-                    pics +=1
+                    pics += 1
                     save_pic = False
 
                 if f == args.num_frames or pics == args.num_pics:
@@ -106,6 +106,7 @@ def main():
                 last_time = now
 
         camera.stop_preview()
+
 
 if __name__ == '__main__':
     main()
